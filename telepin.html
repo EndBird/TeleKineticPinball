@@ -1,0 +1,503 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Pacman Challenge</title>
+<style type="text/css">
+#my-canvas {
+	background-color: black;
+}
+#image {
+	position: absolute;
+	top:50px;
+}
+</style>
+<script src="jquery-2.1.0.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/3.13.3/math.min.js"></script>
+<script>
+
+var diff = 0.523599;     
+var delta = 5;   
+var maxDiff = 0.523599;
+var animationDelta =  0.01;
+var close=false;
+var y = 50;
+var z;
+var w;
+var x;
+var ball_posx; //ball's x coordinate
+var ball_posy; //ball's y coordinate
+var lastballx;
+var lastbally;
+var ball_dir = [5,0]; //velocity of ball
+var checkpointsA=[];
+var checkpointsB =[];
+var e1=Object();
+var scoreA = 0;
+var scoreB = 0;
+function mag(a) {
+	return Math.sqrt(a[0]*a[0] +a[1]*a[1]);
+}
+
+function drawPlayer(ctx, x, y, mod) {
+	ctx.beginPath();
+	ctx.strokeStyle="yellow";
+	ctx.moveTo((x-20)*mod, y);
+	ctx.lineTo((x-20)*mod, y+40);
+	ctx.stroke();
+	ctx.closePath();
+	ctx.beginPath();
+	ctx.arc((x-15)*mod, y+40, 5, 0, Math.PI);
+	ctx.stroke();
+	ctx.closePath();
+	ctx.beginPath();
+	ctx.moveTo((x-10)*mod, y+40);
+	ctx.lineTo((x-10)*mod, y);
+	ctx.stroke();
+	ctx.closePath();
+	ctx.beginPath();
+	ctx.arc((x-15)*mod, y, 5, 0, Math.PI,true);
+	ctx.stroke();
+	ctx.closePath();
+    ctx.strokeStyle="black";
+
+}
+/**
+	addTouchPts adds all the potential points that are positions where the ball might touch the disc for a 
+	given player. 
+**/
+function addTouchPts(checkpointsX, w, z, mod) {
+	
+    for (var i = w;i<=w+40;i=i+5) {
+    	checkpointsX.push([(z-20)*mod,i]);
+    }
+    for (var i=0;i<=Math.PI;i=i+Math.PI/8) {
+    	xaxis = (z-15)*mod + 5*Math.cos(i);
+    	yaxis = w+40 + 5*Math.sin(i);
+    	checkpointsX.push([xaxis,yaxis]);
+
+    }
+    for (var i=Math.PI;i<=2*Math.PI;i=i+Math.PI/8) {
+    	xaxis = (z-15)*mod + 5*Math.cos(i);
+    	yaxis = w + 5*Math.sin(i);
+    	checkpointsX.push([xaxis,yaxis]);
+
+    }
+}
+function drawBall(ctx, ball_posx, ball_posy) {
+	ctx.beginPath();
+	ctx.arc(ball_posx, ball_posy,5, 0, 2*Math.PI);
+	ctx.strokeStyle="red";
+	ctx.stroke();
+	ctx.closePath();
+}
+
+/**
+
+	The algorithm for calculating where the ball will be deflected to when hitting a surface.  It uses a popular formula that calculates the angle
+between two vectors.  The two vectors here represent the surface the ball hits and the velocity of the ball. By figuring out what angle it is we can
+know how much to rotate the ball to simulate a (almost) realistic deflection.  For us we want to rotate the ball so that it bounces out of the surface 
+creating the same angle with the surface as the angle calculated. (imagine an isoceles triangle)   
+**/
+
+function helperforRotatingBall(side) {
+	dot=math.dot(ball_dir, side);
+    ballmag = mag(ball_dir);
+    touchmag = mag(side);
+    denom = ballmag*touchmag;
+    angle = math.acos(dot/denom);
+    tmp =ball_dir[0];
+    ball_dir1=[ball_dir[0], ball_dir[1]];
+    ball_dir[0]=tmp*Math.cos(angle) -ball_dir[1]*Math.sin(angle);
+    ball_dir[1]=tmp*Math.sin(angle)+ball_dir[1]*Math.cos(angle);
+    dot=math.dot(ball_dir, side);
+    ballmag = mag(ball_dir);
+    touchmag = mag(side);
+    denom = ballmag*touchmag;
+    ratio =dot/denom; 
+    			
+    if (ratio > 1 ) {
+    	ratio = Math.floor(ratio);
+    }
+    else if (ratio<-1) {
+    	ratio=Math.ceil(ratio);
+    }
+    angle1 = math.acos(ratio);
+    	
+    //we have two cases to consider.  The angle that is calculated could be the larger angle between them or the smaller angle between.  So 
+    //We have to consider rotating it clockwise and counter clockwise to see which one is the right deflection.		
+    if ((angle1 > 0 && angle1<=2.1073424255447017e-8) || angle1 == 0 || angle1 == Math.PI ||(angle1 > Math.PI && angle1<=Math.PI+2.1073424255447017e-8)) {
+    	tmp =ball_dir[0];   				
+    	ball_dir[0]=tmp*Math.cos(angle) -ball_dir[1]*Math.sin(angle);
+    	ball_dir[1]=tmp*Math.sin(angle)+ball_dir[1]*Math.cos(angle);
+    }
+    else {
+    	tmp=ball_dir1[0];
+    	ball_dir[0]=tmp*Math.cos(-2*angle) -ball_dir1[1]*Math.sin(-2*angle);
+    	ball_dir[1]=tmp*Math.sin(-2*angle)+ball_dir1[1]*Math.cos(-2*angle);
+
+
+    }
+}
+function helperForTouchPts(checkpointsA, ball_posx, ball_posy) {
+	var min=500;
+    var touchpt;
+    for (var el of checkpointsA) {
+    	distance = Math.sqrt((ball_posx-el[0])*(ball_posx-el[0])+(ball_posy-el[1])*(ball_posy-el[1]));
+    			
+    			
+    	if (distance<min) {
+    		min = distance;
+    				
+    		touchpt=el;
+    	}
+    }
+    return touchpt;
+}
+
+function drawPlayerAndNet(context) {
+	context.fillStyle = "black";
+	context.fillRect(0,0,$("canvas").width(),$("canvas").width());  //black background.  
+	context.fillStyle = "pink";
+	context.fillRect(0,$("canvas").width()/2-10,10,60);  //the net 
+	context.fillRect($("canvas").width()-10,$("canvas").width()/2-10,10,60); //the net
+}
+function init() {
+	
+
+	var c = document.getElementById("my-canvas");
+	var ctx = c.getContext("2d");
+	ball_posx=$("canvas").width()/2;
+	ball_posy=$("canvas").height()/2-10.5;
+	z=$("canvas").width();
+    w=$("canvas").height()/2;
+    x=$("canvas").height()/2;
+
+    
+    setInterval(animate, 50);
+
+	
+}
+
+function updateDrawing(e) {
+
+	
+	if (e===undefined) {
+		
+		if (e1.which != undefined) {
+		if ( e1.which==87) 
+	{
+		x=x-delta;
+	}
+	else if (e1.which==83) {
+		
+		x=x+delta;
+
+	}
+	else if (e1.which==38) {
+		w=w-delta;
+	}
+	else if (e1.which==40) {
+		w=w+delta;
+	}
+
+
+}
+	}
+	
+	else if (e.which==87) 
+	{
+		x=x-delta;
+	}
+	else if (e.which==83) {
+		
+		x=x+delta;
+
+	}
+	else if (e.which==38) {
+		w=w-delta;
+		
+	}
+	else if (e.which==40) {
+		w=w+delta;
+	}
+	var c = document.getElementById("my-canvas");
+	var ctx = c.getContext("2d");
+	context = c.getContext("2d");
+	drawPlayerAndNet(context);
+	drawBall(ctx, ball_posx, ball_posy);
+
+	drawPlayer(ctx, z,w,1);
+  
+	drawPlayer(ctx, 0, x, -1);
+	
+    checkpointsA=[];
+    addTouchPts(checkpointsA, x, 0, -1);
+    
+    
+    checkpointsB=[];
+    addTouchPts(checkpointsB, w, z, 1);
+    
+    
+    
+	
+
+
+} 
+function animateBall(ball_posx, ball_posy, ball_dir, checkpointsB, checkpointsA, dir_list) {
+
+	var c = document.getElementById("my-canvas");
+	var ctx = c.getContext("2d"); 
+		if (ball_posx>=5 && ball_posx <=15 && ball_posy >= $("canvas").width()/2-10 && ball_posy <= $("canvas").width()/2+50){
+			scoreB++;
+			$("#B").html(scoreB);
+
+		}
+		else if (ball_posx>=$("canvas").width()-10-5 && ball_posx <=$("canvas").width()-5 && ball_posy >= $("canvas").width()/2-10 && ball_posy <= $("canvas").width()/2+50){
+			scoreA++;
+			$("#A").html(scoreA);
+
+		}
+
+        if (ball_posx >= z-20-5 && ball_posy <= w+40+5+5 && ball_posy >= w-5-5) { //Case of The ball is hitting player B
+        	
+        	touchpt = helperForTouchPts(checkpointsB, ball_posx, ball_posy);
+    		
+    		if (touchpt[0] == z-20  || touchpt[0] == z-10) {//ball hits the flat surface.  
+    			
+    			ball_dir[0]=-1*ball_dir[0];
+		
+    		}
+    		else if (touchpt[1] > w+40  && touchpt[0] > z-15 ) { // ball hits the lower rounded corner of the disc. 
+    			
+        		ball_dir[1]=-1*ball_dir[1];
+        		ball_dir[0]=-1*ball_dir[0];
+ 		
+    		}
+    		else if (touchpt[1] < w  && touchpt[0] > z-15) { //ball hits the upper rounded corner of the disc. 
+    					
+    			
+    			ball_dir[1]=-1*ball_dir[1];
+        		ball_dir[0]=-1*ball_dir[0];
+	
+    		}
+
+    		else if (touchpt[1] > w+40  && touchpt[0] < z-15 ) { // ball hits lower rouned corner on the side away from the play area. 
+
+    			side=[Math.cos(Math.PI/3+Math.PI/2), -Math.sin(Math.PI/3 + Math.PI/2)];
+    			helperforRotatingBall(side);
+    			
+    		}
+    		
+    			
+    		
+    		else if ((touchpt[1] > w+40  && touchpt[0] == z-15) || (touchpt[1] < w  && touchpt[0] == z-15)) { //ball hits the flat top of the rounded 
+    			//part of the disc.  
+    			var side = [5, 0];
+    			helperforRotatingBall(side);
+    			
+    		}
+    		else if (touchpt[1] < w  && touchpt[0] < z-15) { // ball hits upper rouned corner on the side away from the play area. 
+    			
+    			side=[Math.cos(Math.PI/3+Math.PI/2), Math.sin(Math.PI/3 + Math.PI/2)];
+    			helperforRotatingBall(side);
+    			
+
+    		}
+ 
+
+        }
+        else if (ball_posx <= 20+5 && ball_posy <= x+40+5+5 && ball_posy >= x-5-5) { //Case of The ball is hitting player A
+        	
+        	touchpt = helperForTouchPts(checkpointsA, ball_posx, ball_posy);
+    		
+    		
+    		if (touchpt[0] == 20 || touchpt[0]==10) { //ball hits the flat surface.  
+    			
+    			ball_dir[0]=-1*ball_dir[0];
+    			
+    			
+    			
+    		}
+    		else if (touchpt[1] > x+40 && touchpt[0] < 15 ){ //ball hits the lower rounded corner facing away from the game. 
+    			
+    			ball_dir[1]=-1*ball_dir[1];
+        		ball_dir[0]=-1*ball_dir[0];
+
+    		}
+    		else if (touchpt[1] < x && touchpt[0] < 15 ) { //ball hits the upper rounded corner facing away from the game. 
+    			
+    			ball_dir[1]=-1*ball_dir[1];
+        		ball_dir[0]=-1*ball_dir[0];
+        		
+    		}
+
+    		else if (touchpt[1] > x+40  && touchpt[0] > 15) { //ball hits the lower rounded corner facing the game.  
+    			
+    			side=[Math.cos(Math.PI/3), -Math.sin(Math.PI/3)];
+    			helperforRotatingBall(side);
+
+    		}
+
+    		else if (touchpt[1] < x && touchpt[0] > 15 ) { //ball hits the upper rounded corner facing the game.  
+    			
+    			side =[Math.cos(Math.PI/3), Math.sin(Math.PI/3)];
+    			helperforRotatingBall(side);
+
+    		}
+    		else if (touchpt[0] ==15) { // ball hits the top of the rounded sides of the disc.  
+    			side=[5,0];
+    			helperforRotatingBall(side);
+    		}
+    		
+
+        }
+        else { //case for when ball hit the edges of the canvas.  
+        	if ((ball_posy >= $("canvas").height()-5 || ball_posy<=5)&&(ball_posx >= $("canvas").width()-15 || ball_posx<=15) ) {
+        		//ball hits a corner of the canvas
+        		ball_dir[1]=-ball_dir[1];
+        		ball_dir[0]=-ball_dir[0];
+        	}
+        	else if (ball_posy >= $("canvas").height()-5 || ball_posy<=5) {
+        		//ball hits the top or bottom sides
+    			ball_dir[1]=-ball_dir[1];
+       	
+			}
+			
+			else if (ball_posx >= $("canvas").width()-15 || ball_posx<=15){
+				//ball hits the left or right sides.  
+				ball_dir[0]=-ball_dir[0];
+    			
+			}
+			
+			
+
+
+}
+		ball_posx=ball_posx+ball_dir[0];
+    	ball_posy=ball_posy+ball_dir[1];
+		drawBall(ctx, ball_posx, ball_posy);
+				
+		return [ball_posx,ball_posy,ball_dir[0],ball_dir[1] ];
+		
+}
+
+
+function animate() {
+	var c = document.getElementById("my-canvas");
+	var ctx = c.getContext("2d");
+	context = c.getContext("2d");
+	drawPlayerAndNet(context);
+	drawPlayer(ctx, z, w, 1); 
+	drawPlayer(ctx, 0, x, -1);
+	
+    checkpointsA=[];
+    addTouchPts(checkpointsA, x, 0, -1);
+    
+    checkpointsB=[];
+    addTouchPts(checkpointsB, w, z, 1);
+	var arr=animateBall(ball_posx, ball_posy, ball_dir, checkpointsB, checkpointsA);
+    
+    ball_posx=arr[0];
+    ball_posy=arr[1];
+    ball_dir[0]=arr[2];
+    ball_dir[1]=arr[3];
+
+}
+
+function connectServer(address) {
+	$("html").keydown(function(event) {
+        updateDrawing(event);
+	})
+	document.getElementById("my-canvas").style.visibility="visible";
+	if (address === undefined) {
+		document.getElementById("choosegametype").style.visibility="hidden";		
+		init();
+		return;
+	}
+	socket = new WebSocket("ws://"+address+":8000");
+	socket.onopen = function() {
+		socket.send("ice hockey!");
+	}
+	socket.onmessage = function(e) {
+		
+		var command = JSON.parse(e.data);
+		if (command["player"]=="A" && command["move"]=="up") {
+			e.which = 87;
+			updateDrawing(e);
+		}
+		else if (command["player"]=="A" && command["move"]=="down") {
+			e.which = 83;
+			updateDrawing(e);
+		}
+		else if (command["player"]=="B" && command["move"]=="up") {
+			e.which = 38;
+			updateDrawing(e);
+		}
+		else if (command["player"]=="B" && command["move"]=="down"){
+			e.which = 40;
+			updateDrawing(e);
+		}
+		else {//this means a signal is being sent from the tilting on the phone and not from clicking of arrows.  0
+			if (command["side"]=='left player') {
+				if (command["player"]<0) {
+					e1.which =87;
+				
+					window.setTimeout(updateDrawing(),1000-Math.abs(command["player"]));
+					//set Timeout is used as a way to set the time for when updateDrawing is called.  We 
+					// want to make the disc move further faster when the phone is tilted heavily. Thus 
+					//the time is 1000-(the size of the tilt).  
+				}
+				else if (command["player"]>0){
+					e1.which=83;
+					window.setTimeout(updateDrawing(), 1000-Math.abs(command["player"]));
+				
+				}
+		}
+			else if (command["side"]=='right player') {
+				if (command["player"]<0) {
+					e1.which=38;
+					window.setTimeout(updateDrawing(),1000-Math.abs(command["player"]));
+				}
+				else if (command["player"]>0) {
+					e1.which=40;
+					window.setTimeout(updateDrawing(),1000-Math.abs(command["player"]));
+				}
+
+			}
+
+		}
+		
+
+	}
+	document.getElementById("choosegametype").style.visibility="hidden";
+	init();
+}
+
+$(function() {
+	
+	document.getElementById("my-canvas").style.visibility="hidden";
+	$("#addressbttn").click(function() {
+		connectServer($("#address").val());
+	})
+	
+
+
+});
+
+</script>
+</head>
+<body>
+<p id="choosegametype">
+	Enter Web Server Address:<br>
+	<input id="address"type="text">
+	<button id="addressbttn"type="submit">submit</button><br>
+	if you want to play offline:<br>
+	<button id="offline" onclick="connectServer()">play offline</button>
+</p>
+<canvas id="my-canvas" height="300" width="300">Your browser doesn't support canvas.</canvas>
+<div id="A"></div><br>
+<div id="B"></div>
+
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!doctype html>
+<html>
+<head>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+<script type="text/javascript">
+var socket;
+var tiltfb1=0;
+var player;
+function init2() {
+			if ((window.DeviceMotionEvent) || ('listenForDeviceMovement' in window)) {
+				window.addEventListener('devicemotion', deviceMotionHandler3, false);
+			} else {
+				document.getElementById("dmEvent").innerHTML = "Not supported on your device or browser.  Sorry."
+			}
+
+		}
+
+
+
+function deviceMotionHandler3(eventData) {
+			// Grab the acceleration including gravity from the results
+			var acceleration = eventData.accelerationIncludingGravity;
+			
+			
+			
+			
+			// Z is the acceleration in the Z axis, and tells us if the device is facing up, or down
+			var facingUp = -1;
+			if (acceleration.z > 0) {
+				facingUp = +1;
+			}
+
+			// Convert the value from acceleration to degress
+			//   acceleration.x|y is the acceleration according to gravity, we'll assume we're on Earth and divide 
+			//   by 9.81 (earth gravity) to get a percentage value, and then multiply that by 90 to convert to degrees.				
+			//var tiltLR = Math.round(((acceleration.x) / 9.81) * -90);
+			var tiltFB = Math.round(((acceleration.y + 9.81) / 9.81) * 90 * facingUp);
+			tiltfb1 = tiltFB-tiltfb1;
+			
+			if (Math.abs(tiltfb1)>10) { //the tilt has to be significant to be considered for moving the disc.  This is so that the disc movements 
+				//are stable and smooth. 
+			socket.send(JSON.stringify({"side":player, "player":tiltfb1}));
+			tiltfb1=tiltFB;
+			}
+			
+		}
+
+function connectServer(address) { 
+	socket = new WebSocket("ws://" + address + ":8000");
+	document.getElementById("menu").style.visibility="visible";
+	document.getElementById("choosegametype").style.visibility="hidden";
+}
+function changevisibility(plyr) {
+
+	document.getElementById("selleft").style.visibility="hidden";
+	document.getElementById("selright").style.visibility="hidden";
+	player=plyr;
+	
+}
+
+$(function() {
+	init2();
+	document.getElementById("menu").style.visibility="hidden";
+	$("#addressbttn").click(function() {
+		connectServer($("#address").val());
+	})
+	
+
+})
+</script>
+
+</head>
+<body>
+	<p id="choosegametype">
+	Enter Web Server Address:<br>
+	<input id="address"type="text">
+	<button id="addressbttn"type="submit">submit</button><br>
+	</p>
+	<div id = "menu">
+	<button id="selleft" onclick="changevisibility('left player')" type="button">The Left Object</button>
+	<button id="selright" onclick="changevisibility('right player')" type="button">The Right Object</button>
+	</div>
+
+
+</body>
+</html>

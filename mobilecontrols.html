@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+<head>
+<style type="text/css">
+	#left {
+		visibility: hidden;
+	}
+	#right{
+		visibility: hidden;
+	}
+</style>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+<script type="text/javascript">
+
+function changevisibility() {
+	document.getElementById("left").style.visibility="visible";
+	document.getElementById("right").style.visibility="visible";
+	document.getElementById("selleft").style.visibility="hidden";
+	document.getElementById("selright").style.visibility="hidden";
+	document.getElementById("h2").innerHTML="";
+}
+function connectServer(address) {
+	socket = new WebSocket("ws://" + address + ":8000");
+	$("#left").click(function() {
+		socket.send("left");
+
+	});
+
+	$("#right").click(function() {
+		socket.send("right");
+
+	});
+
+	$("#selleft").click(function() {
+		socket.send("play left");
+
+	});
+
+	$("#selright").click(function() {
+		socket.send("play right");
+
+	});
+	document.getElementById("menu").style.visibility="visible";
+	document.getElementById("choosegametype").style.visibility="hidden";
+
+}
+
+$(function(){
+
+
+	document.getElementById("menu").style.visibility="hidden";
+	$("#addressbttn").click(function() {
+		connectServer($("#address").val());
+	})
+
+
+
+})
+
+
+
+</script>
+</head>
+<body>
+	<p id="choosegametype">
+	Enter Web Server Address:<br>
+	<input id="address"type="text">
+	<button id="addressbttn"type="submit">submit</button><br>
+	</p>
+	<div id="menu">
+		<h2 id="h2">Select Side:</h2>
+		<button id="selleft" onclick="changevisibility()" type="button">The Left Player</button>
+		<button id="selright" onclick="changevisibility()" type="button">The Right Player</button>
+		<button id="left" type="button">&lt</button>
+		<button id="right" type="button">&gt</button>
+	</div>
+	
+</body>
+
+</html>
